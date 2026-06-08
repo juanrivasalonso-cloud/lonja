@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Lonja">
+<meta name="theme-color" content="#1D9E75">
+<title>Compras de Pescado</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --green: #1D9E75; --green-dark: #0F6E56; --green-light: #E1F5EE; --green-text: #085041;
+    --red: #E24B4A; --red-light: #FCEBEB;
+    --amber: #854F0B; --amber-light: #FAEEDA;
+    --blue: #185FA5; --blue-light: #E6F1FB;
+    --gray: #888780; --gray-light: #F1EFE8;
+    --bg: #f5f5f0; --surface: #ffffff; --border: rgba(0,0,0,0.1);
+    --text: #1a1a18; --muted: #666662;
+    --radius: 14px; --radius-sm: 8px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a18; --surface: #2c2c2a; --border: rgba(255,255,255,0.1);
+      --text: #f0efe8; --muted: #999994;
+      --green-light: #04342C; --green-text: #9FE1CB;
+      --amber-light: #412402; --blue-light: #042C53;
+    }
+  }
+
+  html, body { height: 100%; background: var(--bg); font-family: 'DM Sans', sans-serif; color: var(--text); }
+
+  /* Header */
+  .header {
+    background: var(--green);
+    color: #fff;
+    padding: 16px 20px 16px;
+    padding-top: calc(16px + env(safe-area-inset-top, 0px));
+    display: flex; align-items: center; gap: 12px;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .header-icon { font-size: 28px; }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header p { font-size: 12px; opacity: 0.8; }
+  .header-right { margin-left: auto; display: flex; gap: 8px; }
+  .icon-btn { background: rgba(255,255,255,0.2); border: none; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; color: #fff; }
+  .icon-btn:active { background: rgba(255,255,255,0.35); }
+
+  /* Main scroll */
+  .main { padding: 16px 16px calc(100px + var(--safe-bottom)); min-height: calc(100vh - 72px); }
+
+  /* Record zone */
+  .record-card {
+    background: var(--surface); border-radius: var(--radius); padding: 24px 20px;
+    margin-bottom: 16px; text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .mic-btn {
+    width: 80px; height: 80px; border-radius: 50%; border: none;
+    background: var(--green); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 14px; font-size: 32px; color: #fff;
+    transition: transform 0.15s, background 0.2s;
+    box-shadow: 0 4px 16px rgba(29,158,117,0.35);
+  }
+  .mic-btn:active { transform: scale(0.95); }
+  .mic-btn.recording { background: var(--red); box-shadow: 0 4px 16px rgba(226,75,74,0.35); animation: pulse 1.2s infinite; }
+  .mic-btn.loading { background: var(--gray); box-shadow: none; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 4px 16px rgba(226,75,74,0.35); transform: scale(1); } 50% { box-shadow: 0 4px 28px rgba(226,75,74,0.55); transform: scale(1.04); } }
+  .rec-status { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+  .rec-status.live { color: var(--red); }
+  .rec-hint { font-size: 12px; color: var(--muted); }
+  .transcript { margin-top: 14px; padding: 12px 14px; background: var(--bg); border-radius: var(--radius-sm); font-size: 13px; color: var(--muted); text-align: left; display: none; line-height: 1.5; }
+  .transcript.visible { display: block; }
+
+  /* Section title */
+  .section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 4px 10px; }
+
+  /* Empty */
+  .empty { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px; }
+  .empty-icon { font-size: 40px; display: block; margin-bottom: 8px; opacity: 0.4; }
+
+  /* Entry card */
+  .entry-card { background: var(--surface); border-radius: var(--radius); margin-bottom: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .entry-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 8px; }
+  .entry-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px; border-radius: 99px; font-size: 11px; font-weight: 500; }
+  .badge-green { background: var(--green-light); color: var(--green-text); }
+  .badge-blue { background: var(--blue-light); color: var(--blue); }
+  .badge-amber { background: var(--amber-light); color: var(--amber); }
+  .del-btn { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 4px; line-height: 1; }
+  .del-btn:active { color: var(--red); }
+
+  /* Table inside card */
+  .entry-table { width: 100%; font-size: 13px; border-collapse: collapse; padding: 0 14px 14px; display: table; }
+  .entry-table th { text-align: left; color: var(--muted); font-weight: 400; font-size: 11px; padding: 0 8px 6px 0; border-bottom: 1px solid var(--border); }
+  .entry-table th:last-child { text-align: right; padding-right: 14px; }
+  .entry-table th:first-child { padding-left: 14px; }
+  .entry-table td { padding: 6px 8px 6px 0; vertical-align: top; color: var(--text); }
+  .entry-table td:first-child { padding-left: 14px; }
+  .entry-table td:last-child { text-align: right; padding-right: 14px; }
+  .entry-table tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+  .na { color: var(--muted); }
+
+  /* Total bar */
+  .total-bar { background: var(--surface); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 14px; display: none; align-items: center; justify-content: space-between; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .total-label { font-size: 13px; color: var(--muted); }
+  .total-val { font-size: 22px; font-weight: 600; color: var(--green); }
+
+  /* Bottom action bar */
+  .bottom-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    padding: 12px 16px calc(12px + var(--safe-bottom));
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    display: flex; gap: 10px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .action-btn {
+    flex: 1; padding: 14px 10px; border-radius: var(--radius-sm); border: none; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .action-btn:active { transform: scale(0.97); }
+  .action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-excel { background: var(--green); color: #fff; }
+  .btn-wa { background: #25D366; color: #fff; }
+
+  /* Spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { display: inline-block; animation: spin 0.8s linear infinite; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <span class="header-icon">🐟</span>
+  <div>
+    <h1>Compras de pescado</h1>
+    <p>Nota de voz → Excel → WhatsApp</p>
+  </div>
+</header>
+
+<main class="main">
+  <!-- Grabación -->
+  <div class="record-card">
+    <button class="mic-btn" id="micBtn" aria-label="Grabar nota de voz">🎙️</button>
+    <p class="rec-status" id="recStatus">Pulsa para grabar</p>
+    <p class="rec-hint">Di: pescado, cantidad, precio, vendedor y barco</p>
+    <div class="transcript" id="transcript"></div>
+  </div>
+
+  <!-- Lista -->
+  <p class="section-title">Partidas anotadas</p>
+  <div id="entriesList">
+    <div class="empty">
+      <span class="empty-icon">📋</span>
+      Aún no hay partidas.<br>¡Graba tu primer pedido!
+    </div>
+  </div>
+
+  <div class="total-bar" id="totalBar">
+    <span class="total-label">Total estimado</span>
+    <span class="total-val" id="totalVal">0,00 €</span>
+  </div>
+</main>
+
+<!-- Botones abajo -->
+<div class="bottom-bar">
+  <button class="action-btn btn-excel" id="exportBtn" disabled>
+    📊 Exportar Excel
+  </button>
+  <button class="action-btn btn-wa" id="waBtn" disabled>
+    💬 WhatsApp
+  </button>
+</div>
+
+<script>
+let entries = [];
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+
+const micBtn = document.getElementById('micBtn');
+const recStatus = document.getElementById('recStatus');
+const transcriptEl = document.getElementById('transcript');
+const entriesList = document.getElementById('entriesList');
+const exportBtn = document.getElementById('exportBtn');
+const waBtn = document.getElementById('waBtn');
+const totalBar = document.getElementById('totalBar');
+const totalVal = document.getElementById('totalVal');
+
+micBtn.addEventListener('click', () => {
+  if (isRecording) stopRecording();
+  else startRecording();
+});
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // Elegir el mejor codec disponible
+    const mimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+    const mimeType = mimeTypes.find(t => MediaRecorder.isTypeSupported(t)) || '';
+    mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+    audioChunks = [];
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.start(250);
+    isRecording = true;
+    micBtn.classList.add('recording');
+    micBtn.textContent = '⏹️';
+    recStatus.textContent = 'Grabando… pulsa para detener';
+    recStatus.classList.add('live');
+    transcriptEl.classList.remove('visible');
+  } catch (err) {
+    recStatus.textContent = 'Error: permite el micrófono en el navegador';
+  }
+}
+
+function stopRecording() {
+  if (!mediaRecorder) return;
+  mediaRecorder.stop();
+  mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  isRecording = false;
+  micBtn.classList.remove('recording');
+  micBtn.classList.add('loading');
+  micBtn.textContent = '⏳';
+  recStatus.textContent = 'Procesando con IA…';
+  recStatus.classList.remove('live');
+
+  mediaRecorder.onstop = async () => {
+    const mimeType = audioChunks[0]?.type || 'audio/webm';
+    const blob = new Blob(audioChunks, { type: mimeType });
+    await transcribeAndExtract(blob, mimeType);
+    micBtn.classList.remove('loading');
+    micBtn.textContent = '🎙️';
+    recStatus.textContent = 'Pulsa para grabar otro pedido';
+  };
+}
+
+async function transcribeAndExtract(audioBlob, mimeType) {
+  const reader = new FileReader();
+  reader.readAsDataURL(audioBlob);
+  await new Promise(res => reader.onload = res);
+  const base64 = reader.result.split(',')[1];
+
+  transcriptEl.classList.add('visible');
+  transcriptEl.textContent = '⏳ Analizando el audio…';
+
+  const apiMime = mimeType.split(';')[0] || 'audio/webm';
+
+  const prompt = `Eres un asistente de lonja de pescado. Escucha el audio adjunto y extrae los datos de compra.
+Responde ÚNICAMENTE con JSON válido, sin texto extra ni backticks:
+{
+  "transcript": "texto transcrito",
+  "items": [
+    {
+      "pescado": "nombre en español",
+      "cantidad": "ej: 5 kg",
+      "precio": número_o_null,
+      "vendedor": "nombre_o_null",
+      "barco": "nombre_o_null"
+    }
+  ]
+}
+Si un campo no se menciona usa null. Puede haber varios artículos.`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'document', source: { type: 'base64', media_type: apiMime, data: base64 } }
+          ]
+        }]
+      })
+    });
+    const data = await resp.json();
+    const text = (data.content || []).map(b => b.text || '').join('');
+    const clean = text.replace(/```json|```/g, '').trim();
+    let parsed;
+    try { parsed = JSON.parse(clean); } catch { parsed = null; }
+
+    if (parsed && parsed.items && parsed.items.length > 0) {
+      transcriptEl.textContent = '🎤 ' + (parsed.transcript || 'Audio procesado correctamente');
+      addEntry(parsed);
+    } else {
+      transcriptEl.textContent = '⚠️ No se detectaron artículos. Menciona pescado, cantidad, precio, vendedor y barco.';
+    }
+  } catch (err) {
+    transcriptEl.textContent = '⚠️ Error de conexión. Verifica que tienes internet.';
+  }
+}
+
+function addEntry(parsed) {
+  entries.push({
+    id: Date.now(),
+    time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+    date: new Date().toLocaleDateString('es-ES'),
+    items: parsed.items
+  });
+  renderEntries();
+  updateTotal();
+  exportBtn.disabled = false;
+  waBtn.disabled = false;
+}
+
+function deleteEntry(id) {
+  entries = entries.filter(e => e.id !== id);
+  renderEntries();
+  updateTotal();
+  if (!entries.length) {
+    exportBtn.disabled = true;
+    waBtn.disabled = true;
+    totalBar.style.display = 'none';
+  }
+}
+
+function renderEntries() {
+  if (!entries.length) {
+    entriesList.innerHTML = `<div class="empty"><span class="empty-icon">📋</span>Aún no hay partidas.<br>¡Graba tu primer pedido!</div>`;
+    return;
+  }
+  entriesList.innerHTML = entries.map(e => {
+    const vendedores = [...new Set(e.items.map(i => i.vendedor).filter(Boolean))];
+    const barcos = [...new Set(e.items.map(i => i.barco).filter(Boolean))];
+    return `
+    <div class="entry-card">
+      <div class="entry-top">
+        <div class="entry-badges">
+          <span class="badge badge-green">🕐 ${e.time}</span>
+          ${vendedores.map(v => `<span class="badge badge-blue">👤 ${v}</span>`).join('')}
+          ${barcos.map(b => `<span class="badge badge-amber">⚓ ${b}</span>`).join('')}
+        </div>
+        <button class="del-btn" onclick="deleteEntry(${e.id})" aria-label="Eliminar">🗑️</button>
+      </div>
+      <table class="entry-table">
+        <thead><tr><th>Pescado</th><th>Cantidad</th><th>Precio</th></tr></thead>
+        <tbody>
+          ${e.items.map(it => `<tr>
+            <td>${it.pescado || '<span class="na">—</span>'}</td>
+            <td>${it.cantidad || '<span class="na">—</span>'}</td>
+            <td>${it.precio != null ? it.precio.toFixed(2)+' €' : '<span class="na">—</span>'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }).join('');
+}
+
+function updateTotal() {
+  const sum = entries.flatMap(e => e.items).reduce((a, it) => a + (it.precio || 0), 0);
+  if (sum > 0) {
+    totalBar.style.display = 'flex';
+    totalVal.textContent = sum.toFixed(2).replace('.', ',') + ' €';
+  }
+}
+
+function allRows() {
+  return entries.flatMap(e =>
+    e.items.map(it => ({
+      'Fecha': e.date, 'Hora': e.time,
+      'Pescado': it.pescado || '',
+      'Cantidad': it.cantidad || '',
+      'Precio (€)': it.precio ?? '',
+      'Vendedor': it.vendedor || '',
+      'Barco': it.barco || ''
+    }))
+  );
+}
+
+exportBtn.addEventListener('click', () => {
+  const ws = XLSX.utils.json_to_sheet(allRows());
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Compras');
+  ws['!cols'] = [{ wch: 10 }, { wch: 7 }, { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 16 }];
+  const fecha = new Date().toLocaleDateString('es-ES').replace(/\//g, '-');
+  XLSX.writeFile(wb, `compras_pescado_${fecha}.xlsx`);
+});
+
+waBtn.addEventListener('click', () => {
+  const fecha = new Date().toLocaleDateString('es-ES');
+  let msg = `🐟 *Compras de pescado — ${fecha}*\n\n`;
+  entries.forEach(e => {
+    e.items.forEach(it => {
+      msg += `• *${it.pescado || '?'}* — ${it.cantidad || '?'}`;
+      if (it.precio != null) msg += ` — ${it.precio.toFixed(2)} €`;
+      if (it.vendedor) msg += ` | 👤 ${it.vendedor}`;
+      if (it.barco) msg += ` | ⚓ ${it.barco}`;
+      msg += '\n';
+    });
+  });
+  const sum = entries.flatMap(e => e.items).reduce((a, it) => a + (it.precio || 0), 0);
+  if (sum > 0) msg += `\n💶 *Total: ${sum.toFixed(2)} €*`;
+  msg += '\n_(App compras pescado)_';
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+});
+</script>
+</body>
+</html>
